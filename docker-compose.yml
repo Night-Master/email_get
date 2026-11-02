@@ -1,0 +1,15 @@
+services:
+  email_get:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: email_get
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - email_get_data:/app/data
+
+volumes:
+  email_get_data:
