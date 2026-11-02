@@ -60,6 +60,7 @@ def guess_imap_server(email_address: str) -> str:
         "work9.cn": "imap.hotmuil.com",
         "hotmuil.com": "imap.hotmuil.com",
         "qq.com": "imap.qq.com",
+        "foxmail.com": "imap.qq.com",
         "163.com": "imap.163.com",
         "126.com": "imap.126.com",
         "yeah.net": "imap.yeah.net",

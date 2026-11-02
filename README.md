@@ -1,10 +1,17 @@
 # email_get
 
-本项目现在是一个 Go Web + Vue 的本地桌面式 Web 应用。
+**一个对标心蓝邮箱助手的本地化多邮箱管理与收件工具。** 支持 QQ 邮箱、Foxmail、163 邮箱和 Outlook，可统一管理多个邮箱账号、批量收取邮件、查询正文，并通过 API 接入自动化流程。
 
+本项目采用 Go Web + Vue 架构：
+
+- **QQ 邮箱 / Foxmail**：支持 IMAP、POP3，Foxmail 自动使用 QQ 邮箱服务器
+- **163 邮箱**：支持 IMAP、POP3，同时兼容 126、Yeah 邮箱
+- **Outlook / Hotmail / Live**：支持自动服务器匹配及 OAuth 接入
 - Go 后端负责账号解析、MX / IMAP / POP / SMTP 自动探测、IMAP / POP3 收件、API 和静态资源嵌入
 - Vue 前端负责账号导入、协议选择、批量接邮件、当前邮件列表展示
 - 最终产物是单个 Go 可执行文件，前端资源通过 `go:embed` 打进程序里
+
+> 邮箱需要在服务商后台开启 IMAP 或 POP3。QQ 邮箱、Foxmail、163 等通常使用授权码或客户端专用密码，Outlook 可使用项目支持的 OAuth 格式，具体以服务商要求为准。
 
 ## 安装与运行
 
