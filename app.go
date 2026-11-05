@@ -39,6 +39,7 @@ type WebApp struct {
 	fetchJobs         map[string]*FetchJob
 	fetchJobOrder     []string
 	activeFetchOwners map[string]string
+	mailboxSyncs      map[string]int
 	state             AppState
 	db                *sql.DB
 	statePath         string
@@ -65,6 +66,7 @@ type StoredAccount struct {
 	UpdatedAt     time.Time  `json:"updatedAt"`
 	LastFetchedAt *time.Time `json:"lastFetchedAt,omitempty"`
 	LastError     string     `json:"lastError,omitempty"`
+	LastErrorCode string     `json:"lastErrorCode,omitempty"`
 	LastProtocol  string     `json:"lastProtocol,omitempty"`
 }
 
@@ -80,6 +82,7 @@ type AccountView struct {
 	UpdatedAt     time.Time  `json:"updatedAt"`
 	LastFetchedAt *time.Time `json:"lastFetchedAt,omitempty"`
 	LastError     string     `json:"lastError,omitempty"`
+	LastErrorCode string     `json:"lastErrorCode,omitempty"`
 	LastProtocol  string     `json:"lastProtocol,omitempty"`
 }
 
@@ -163,6 +166,7 @@ func NewWebApp(dataDir string) (*WebApp, error) {
 		statePath:         filepath.Join(dataDir, "state.json"),
 		fetchJobs:         map[string]*FetchJob{},
 		activeFetchOwners: map[string]string{},
+		mailboxSyncs:      map[string]int{},
 		fetchTimeout:      defaultFetchTimeout,
 	}
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -197,6 +201,7 @@ func (a *WebApp) Routes() http.Handler {
 	mux.HandleFunc("/api/fetch", a.handleFetch)
 	mux.HandleFunc("/api/fetch/", a.handleFetchByID)
 	mux.HandleFunc("/api/search", a.handleSearch)
+	mux.HandleFunc("/api/verification-codes/search", a.handleVerificationCodeSearch)
 	mux.HandleFunc("/api/endpoints", a.handleEndpoints)
 	mux.HandleFunc("/api/endpoints/", a.handleEndpointByID)
 	mux.HandleFunc("/api/proxy-settings", a.handleProxySettings)
@@ -689,6 +694,9 @@ func (a *WebApp) fetchSelectedAccounts(req FetchRequest, selectedAccounts []Stor
 }
 
 func (a *WebApp) fetchSingleAccount(stored StoredAccount, req FetchRequest) FetchAccountResult {
+	a.startMailboxSync(stored.ID)
+	defer a.finishMailboxSync(stored.ID)
+
 	result := FetchAccountResult{
 		AccountID: stored.ID,
 		Email:     stored.Email,
@@ -855,8 +863,10 @@ func (a *WebApp) updateAccountFetchResultLocked(accountID, protocol string, fetc
 		account.LastProtocol = protocol
 		if fetchErr != nil {
 			account.LastError = humanizeProtocolError(fetchErr)
+			account.LastErrorCode = classifyMailboxError(fetchErr)
 		} else {
 			account.LastError = ""
+			account.LastErrorCode = ""
 			account.LastFetchedAt = &now
 		}
 		a.state.Accounts[i] = account
@@ -1000,6 +1010,7 @@ func toAccountView(account StoredAccount) AccountView {
 		UpdatedAt:     account.UpdatedAt,
 		LastFetchedAt: account.LastFetchedAt,
 		LastError:     account.LastError,
+		LastErrorCode: account.LastErrorCode,
 		LastProtocol:  account.LastProtocol,
 	}
 }

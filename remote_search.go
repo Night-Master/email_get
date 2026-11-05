@@ -24,7 +24,7 @@ func (a *WebApp) searchAccounts(req SearchRequest) (*SearchResponse, error) {
 		cutoff = time.Now().Add(-time.Duration(req.RecentSeconds) * time.Second)
 	}
 
-	var messages []StoredMessage
+	messages := make([]StoredMessage, 0)
 	for _, stored := range selectedAccounts {
 		runtimeAccount := Account{
 			Email:        stored.Email,

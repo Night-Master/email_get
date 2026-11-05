@@ -333,6 +333,89 @@ GET /api/accounts?keyword=163.com
 - `http://user:pass@host:port`
 - `https://user:pass@host:port`
 
+## Verification Codes
+
+### `POST /api/verification-codes/search`
+
+从**已成功同步到本地**的邮件中查找指定服务的验证码。接口不连接 IMAP/POP3，不触发收件，也不长时间阻塞；注册系统负责控制轮询间隔和总等待期限。
+
+推荐流程：
+
+1. 提交注册前记录 RFC 3339 时间，作为 `received_after`
+2. 调用 `POST /api/fetch`，传 `async: true`、`allMessages: true` 和对应邮箱，启动后台同步
+3. 每隔数秒调用本接口，直到 `found` 或达到总等待期限；需要新数据时再次发起后台同步
+
+请求体：
+
+```json
+{
+  "mailbox_id": "fe92d40f7557e3ac",
+  "service": "reddit",
+  "received_after": "2026-11-05T14:00:00Z"
+}
+```
+
+- `mailbox_id`：必填，账号 ID 或完整邮箱地址
+- `service`：必填，服务标识；按发件人、主题和正文匹配，`reddit` 使用 6 位数字验证码规则，其他服务使用通用 4～8 位数字验证码规则
+- `received_after`：必填，本次注册开始时间；只接受邮件 `Date` 头时间不早于该时间的邮件，无法解析时间的邮件不会参与匹配
+- 多封邮件匹配时返回最新一封；`message_id` 可用于调用方去重
+
+尚未找到验证码：
+
+```json
+{
+  "status": "pending",
+  "code": null,
+  "message_id": null,
+  "received_at": null,
+  "last_synced_at": "2026-11-05T14:02:00Z",
+  "sync_status": "synced"
+}
+```
+
+找到验证码：
+
+```json
+{
+  "status": "found",
+  "code": "123456",
+  "message_id": "302ae330652fd2daa96121690abea757e2e28548",
+  "received_at": "2026-11-05T14:01:30Z",
+  "last_synced_at": "2026-11-05T14:02:00Z",
+  "sync_status": "synced"
+}
+```
+
+`last_synced_at` 是最近一次成功同步邮箱的时间，不是本次接口调用时间；从未成功同步时为 `null`。`sync_status` 含义：
+
+- `synced`：最近一次同步成功；`pending` 表示截至 `last_synced_at` 没有匹配验证码
+- `syncing`：邮箱正在同步；`pending` 不能视为已经确认没有邮件
+- `never_synced`：从未成功同步；`last_synced_at` 为 `null`，调用方应先发起收件
+
+查询或最近一次同步失败时返回结构化错误，不返回 `pending`：
+
+| HTTP | `error.code` | `error.retryable` | 含义 |
+|---|---|---|---|
+| 400 | `invalid_request` / `invalid_received_after` | `false` | 请求参数错误 |
+| 401 | `mailbox_auth_failed` | `false` | 邮箱登录失效，应停止等待并修复凭据 |
+| 404 | `mailbox_not_found` | `false` | 邮箱不存在 |
+| 504 | `mailbox_timeout` | `true` | 邮件供应商超时，可在等待期限内重试 |
+| 502 | `mailbox_sync_failed` | `true` | 其他邮箱同步故障 |
+
+错误响应示例；存在历史成功同步时还会带顶层 `last_synced_at`：
+
+```json
+{
+  "error": {
+    "code": "mailbox_auth_failed",
+    "message": "邮箱登录凭据已失效",
+    "retryable": false
+  }
+}
+```
+
+本接口只读内存中的已同步数据，正常调用应快速返回，调用方可使用约 `5s` 的 HTTP 超时。`-fetch-timeout`（默认 `30s`）只控制后台或同步收件时的单条 IMAP/POP3 命令，不影响本接口，因此不要再让验证码轮询经过允许阻塞 30 秒的远端 `/api/search`。
+
 ## Remote Search
 
 ### `POST /api/search`
@@ -343,7 +426,8 @@ GET /api/accounts?keyword=163.com
 
 - `IMAP` 会先用服务端 `SEARCH` 缩小范围，再在程序内存里按秒级时间和正则精确过滤
 - `POP3` 没有原生服务端查询能力，只能拉取候选邮件后在程序内存里过滤
-- 这个接口不走 SQLite 查询层
+- 这个接口不走 SQLite 查询层；查询成功但没有匹配邮件时 `messages` 为 `[]`
+- 该接口可能长时间连接远端邮箱，等待注册验证码应使用上面的 `/api/verification-codes/search`
 
 请求体：
 

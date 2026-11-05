@@ -259,6 +259,22 @@ Web 界面和 API 默认要求登录(单租户,只有一个管理密码):
 - 同一时间只允许一个后台收件任务运行；重复发起会直接返回当前任务
 - `async` 省略或为 `false` 时，仍保留原来的同步返回 `results` 行为，兼容旧调用方
 
+### `POST /api/verification-codes/search`
+
+从已同步邮件中查询验证码，不直接连接邮箱。请求体：
+
+```json
+{
+  "mailbox_id": "邮箱账号 ID 或完整邮箱地址",
+  "service": "reddit",
+  "received_after": "2026-11-05T14:00:00Z"
+}
+```
+
+返回 `pending` 或 `found`，并通过 `last_synced_at`、`sync_status` 暴露真实同步状态。登录失效、供应商超时和其他同步故障分别返回 `mailbox_auth_failed`、`mailbox_timeout`、`mailbox_sync_failed`，不会伪装成空结果。
+
+注册系统先用 `POST /api/fetch` 的 `async=true` 模式同步邮箱，再按自己的轮询间隔和总等待期限调用该接口。完整响应和错误码见 [API.md](./API.md)。
+
 ### `GET /api/proxy-settings`
 
 返回当前代理开关和代理列表。

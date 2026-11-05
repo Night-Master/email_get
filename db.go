@@ -42,6 +42,7 @@ func (a *WebApp) initDB() error {
 			updated_at TEXT NOT NULL,
 			last_fetched_at TEXT,
 			last_error TEXT,
+			last_error_code TEXT,
 			last_protocol TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS messages (
@@ -95,6 +96,11 @@ func (a *WebApp) initDB() error {
 			return err
 		}
 	}
+	if _, err := db.Exec(`ALTER TABLE accounts ADD COLUMN last_error_code TEXT`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column name") {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -132,7 +138,7 @@ func (a *WebApp) loadStateFromDB() error {
 
 	state := AppState{}
 
-	rows, err := a.db.Query(`SELECT id, email, password, server, port, client_id, refresh_token, protocol, created_at, updated_at, last_fetched_at, last_error, last_protocol FROM accounts ORDER BY created_at DESC`)
+	rows, err := a.db.Query(`SELECT id, email, password, server, port, client_id, refresh_token, protocol, created_at, updated_at, last_fetched_at, last_error, last_error_code, last_protocol FROM accounts ORDER BY created_at DESC`)
 	if err != nil {
 		return err
 	}
@@ -140,7 +146,7 @@ func (a *WebApp) loadStateFromDB() error {
 
 	for rows.Next() {
 		var account StoredAccount
-		var server, clientID, refreshToken, lastFetchedAt, lastError, lastProtocol sql.NullString
+		var server, clientID, refreshToken, lastFetchedAt, lastError, lastErrorCode, lastProtocol sql.NullString
 		var port sql.NullInt64
 		var createdAt, updatedAt string
 		if err := rows.Scan(
@@ -156,6 +162,7 @@ func (a *WebApp) loadStateFromDB() error {
 			&updatedAt,
 			&lastFetchedAt,
 			&lastError,
+			&lastErrorCode,
 			&lastProtocol,
 		); err != nil {
 			return err
@@ -171,6 +178,7 @@ func (a *WebApp) loadStateFromDB() error {
 			account.LastFetchedAt = &t
 		}
 		account.LastError = nullableString(lastError)
+		account.LastErrorCode = nullableString(lastErrorCode)
 		account.LastProtocol = nullableString(lastProtocol)
 		state.Accounts = append(state.Accounts, account)
 	}
@@ -245,8 +253,8 @@ func (a *WebApp) saveStateToDB() error {
 			lastFetchedAt = account.LastFetchedAt.Format(time.RFC3339Nano)
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO accounts (id, email, password, server, port, client_id, refresh_token, protocol, created_at, updated_at, last_fetched_at, last_error, last_protocol)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO accounts (id, email, password, server, port, client_id, refresh_token, protocol, created_at, updated_at, last_fetched_at, last_error, last_error_code, last_protocol)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			account.ID,
 			account.Email,
 			account.Password,
@@ -259,6 +267,7 @@ func (a *WebApp) saveStateToDB() error {
 			account.UpdatedAt.Format(time.RFC3339Nano),
 			lastFetchedAt,
 			emptyToNil(account.LastError),
+			emptyToNil(account.LastErrorCode),
 			emptyToNil(account.LastProtocol),
 		); err != nil {
 			return err

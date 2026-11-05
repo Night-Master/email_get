@@ -210,7 +210,15 @@ POST /api/search
 - IMAP 会优先使用服务端能力筛选，POP3 则在程序内存中筛选
 - 该接口面向远端协议层查询，不走本地 SQLite 查询层
 
-### 7. 查询当前邮件列表
+### 7. 查询已同步邮件中的验证码
+
+```http
+POST /api/verification-codes/search
+```
+
+请求体包含 `mailbox_id`、`service` 和本次注册开始时间 `received_after`。接口只查询本地已同步邮件，返回 `pending` / `found`、最近成功同步时间和同步状态；邮箱登录失效、供应商超时等故障使用明确错误码，不与“暂无验证码”混为一谈。
+
+### 8. 查询当前邮件列表
 
 ```http
 GET /api/messages
